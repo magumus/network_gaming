@@ -15,7 +15,7 @@ class Network:
     def connect(self):
         try:
             self.client.connect(self.addr)
-            return pickle.loads(self.client.recv(2048))
+            return pickle.loads(self.client.recv(4096))  # 2048 yerine 4096 kullanıldı
         except:
             pass
 
@@ -24,7 +24,7 @@ class Network:
             self.client.send(pickle.dumps(data))
             full_data = b""
             while True:
-                part = self.client.recv(2048)
+                part = self.client.recv(4096)  # 2048 yerine 4096 kullanıldı
                 full_data += part
                 try:
                     return pickle.loads(full_data)
