@@ -52,13 +52,7 @@ def main():
             player.x += 5
         if keys[pygame.K_SPACE]:
             bullet = pygame.Rect(player.x + player.width // 2, player.y, 5, 10)
-            bullets.append(bullet)
             n.send((player, bullet))
-
-        for bullet in bullets:
-            bullet.y -= 5
-            if bullet.y < 0:
-                bullets.remove(bullet)
 
         redrawWindow(win, players, bullets, aliens)
 

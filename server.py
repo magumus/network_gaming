@@ -67,6 +67,18 @@ def threaded_client(conn, player):
                     bullets.append(alien_bullet)
                     last_alien_shot = time_now
 
+                # Update bullets
+                for bullet in bullets:
+                    bullet.y -= 5
+                    if bullet.y < 0:
+                        bullets.remove(bullet)
+                    else:
+                        for alien in aliens:
+                            if bullet.colliderect(alien):
+                                bullets.remove(bullet)
+                                aliens.remove(alien)
+                                break
+
                 # Update aliens
                 move_aliens()
 
