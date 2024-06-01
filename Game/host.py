@@ -1,11 +1,42 @@
-import socket
-from cgitb import grey
-import subprocess
 import pygame
-import pickle
+import socket
+import subprocess
 import sys
+import pickle
 
 lobby_server_address = ("localhost", 5556)
+
+pygame.init()
+
+# Ekran boyutları ve pencere başlığı
+width = 800
+height = 700
+win = pygame.display.set_mode((width, height))
+pygame.display.set_caption("Host Game")
+
+# Renk tanımlamaları
+white = (255, 255, 255)
+black = (0, 0, 0)
+grey = (100, 100, 100)
+green = (0, 255, 0)
+red = (255, 0, 0)
+
+# Yazı tipleri
+font = pygame.font.SysFont('Arial', 40)
+small_font = pygame.font.SysFont('Arial', 24)
+
+# Arka plan resmi
+bg = pygame.image.load("img/bg.png")
+
+def draw_text(text, font, color, surface, x, y):
+    text_obj = font.render(text, True, color)
+    text_rect = text_obj.get_rect()
+    text_rect.center = (x, y)
+    surface.blit(text_obj, text_rect)
+
+def draw_button(text, font, color, surface, rect, bg_color):
+    pygame.draw.rect(surface, bg_color, rect, border_radius=10)
+    draw_text(text, font, color, surface, rect.centerx, rect.centery)
 
 def connect_to_lobby_server():
     try:
@@ -18,6 +49,9 @@ def connect_to_lobby_server():
         return None
 
 def send_to_lobby_server(client, data):
+    if client is None:
+        print("send_to_lobby_server: No connection to server.")
+        return None
     try:
         print(f"send_to_lobby_server: Sending data to server: {data}")  # Debug message
         client.send(pickle.dumps(data))
@@ -34,77 +68,59 @@ def send_to_lobby_server(client, data):
         return None
 
 def host_game(win):
-    pygame.init()
-    width = 800
-    height = 700
+    username = ""
+    game_name = ""
+    input_active = "username"
+    
+    while True:
+        win.blit(bg, (0, 0))
+        draw_text('Enter Username:', small_font, white, win, width // 2, height // 2 - 100)
+        draw_text('Enter Game Name:', small_font, white, win, width // 2, height // 2)
+        
+        username_rect = pygame.Rect(width // 2 - 100, height // 2 - 80, 200, 40)
+        game_name_rect = pygame.Rect(width // 2 - 100, height // 2 + 20, 200, 40)
+        enter_button = pygame.Rect(width // 2 - 50, height // 2 + 100, 100, 50)
+        back_button = pygame.Rect(width // 2 - 50, height // 2 + 160, 100, 50)
 
-    white = (255, 255, 255)
-    black = (0, 0, 0)
-    font = pygame.font.SysFont('Arial', 40)
-    small_font = pygame.font.SysFont('Arial', 24)
+        pygame.draw.rect(win, grey, username_rect, border_radius=10)
+        pygame.draw.rect(win, grey, game_name_rect, border_radius=10)
+        draw_button('Enter', small_font, white, win, enter_button, grey)
+        draw_button('Back', small_font, white, win, back_button, red)
 
-    def draw_text(text, font, color, surface, x, y):
-        text_obj = font.render(text, True, color)
-        text_rect = text_obj.get_rect()
-        text_rect.center = (x, y)
-        surface.blit(text_obj, text_rect)
+        draw_text(username, small_font, white, win, username_rect.centerx, username_rect.centery)
+        draw_text(game_name, small_font, white, win, game_name_rect.centerx, game_name_rect.centery)
 
-    def input_text_box(surface, font, box, text):
-        pygame.draw.rect(surface, white, box, 2)
-        text_surf = font.render(text, True, white)
-        surface.blit(text_surf, (box.x + 5, box.y + 5))
-
-    input_box_user = pygame.Rect(width // 2 - 100, height // 2 - 60, 200, 50)
-    input_box_game = pygame.Rect(width // 2 - 100, height // 2, 200, 50)
-    user_text = ''
-    game_text = ''
-    active_box = None
-    run = True
-
-    while run:
-        win.fill(black)
-        draw_text('Enter Username and Game Name', font, white, win, width // 2, height // 4)
-
-        draw_text('Username:', small_font, white, win, width // 2 - 150, height // 2 - 35)
-        draw_text('Game Name:', small_font, white, win, width // 2 - 150, height // 2 + 25)
+        pygame.display.update()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if input_box_user.collidepoint(event.pos):
-                    active_box = 'user'
-                elif input_box_game.collidepoint(event.pos):
-                    active_box = 'game'
-                else:
-                    active_box = None
+                if username_rect.collidepoint(event.pos):
+                    input_active = "username"
+                elif game_name_rect.collidepoint(event.pos):
+                    input_active = "game_name"
+                elif enter_button.collidepoint(event.pos):
+                    if username and game_name:
+                        client = connect_to_lobby_server()
+                        if client:
+                            send_to_lobby_server(client, ("ADD", {"username": username, "game_name": game_name}))
+                            subprocess.Popen([sys.executable, "server.py"])  # Sunucuyu başlat
+                        return username, game_name
+                elif back_button.collidepoint(event.pos):
+                    return None  # Ana menüye geri dön
             if event.type == pygame.KEYDOWN:
-                if active_box == 'user':
-                    if event.key == pygame.K_RETURN:
-                        active_box = 'game'
-                    elif event.key == pygame.K_BACKSPACE:
-                        user_text = user_text[:-1]
+                if input_active == "username":
+                    if event.key == pygame.K_BACKSPACE:
+                        username = username[:-1]
                     else:
-                        user_text += event.unicode
-                elif active_box == 'game':
-                    if event.key == pygame.K_RETURN:
-                        run = False
-                    elif event.key == pygame.K_BACKSPACE:
-                        game_text = game_text[:-1]
+                        username += event.unicode
+                elif input_active == "game_name":
+                    if event.key == pygame.K_BACKSPACE:
+                        game_name = game_name[:-1]
                     else:
-                        game_text += event.unicode
-
-        input_text_box(win, small_font, input_box_user, user_text)
-        input_text_box(win, small_font, input_box_game, game_text)
-
-        pygame.display.update()
-
-    client = connect_to_lobby_server()
-    if client:
-        send_to_lobby_server(client, ("ADD", {"username": user_text, "game_name": game_text}))
-        subprocess.Popen([sys.executable, "server.py"])  # Sunucuyu başlat
-    return user_text, game_text
+                        game_name += event.unicode
 
 if __name__ == "__main__":
-    host_game(pygame.display.set_mode((800, 700)))
+    host_game(win)

@@ -115,7 +115,8 @@ def threaded_client(conn, player):
                 print("Sending : ", reply)
 
             conn.sendall(pickle.dumps(reply))
-        except:
+        except Exception as e:
+            print(f"Error: {e}")
             break
 
     print("Lost connection")

@@ -1,3 +1,4 @@
+# lobby_server.py
 import socket
 from _thread import *
 import pickle
@@ -55,6 +56,9 @@ def handle_client(conn):
                 for lobby in lobbies:
                     if lobby["game"]["game_name"] == payload["game_name"]:
                         lobby["started"] = True
+                        for player in lobby["players"]:
+                            # Oyun başlangıcı mesajını her bir oyuncuya gönder
+                            conn.sendall(pickle.dumps(("START_GAME", None)))
             conn.sendall(pickle.dumps(lobbies))
         except:
             break
