@@ -76,11 +76,9 @@ def join_game(win):
         
         username_rect = pygame.Rect(width // 2 - 100, height // 2 - 80, 200, 40)
         enter_button = pygame.Rect(width // 2 - 50, height // 2, 100, 50)
-        back_button = pygame.Rect(width // 2 - 50, height // 2 + 60, 100, 50)
 
         pygame.draw.rect(win, grey, username_rect, border_radius=10)
         draw_button('Enter', small_font, white, win, enter_button, grey)
-        draw_button('Back', small_font, white, win, back_button, red)
 
         draw_text(username, small_font, white, win, username_rect.centerx, username_rect.centery)
 
@@ -104,8 +102,6 @@ def join_game(win):
                                 if selected_lobby:
                                     send_to_lobby_server(client, ("JOIN", {"username": username, "game_name": selected_lobby["game"]["game_name"]}))
                                     return username, selected_lobby
-                elif back_button.collidepoint(event.pos):
-                    return None  # Ana menüye geri dön
             if event.type == pygame.KEYDOWN:
                 if input_active == "username":
                     if event.key == pygame.K_BACKSPACE:

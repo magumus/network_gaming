@@ -1,4 +1,3 @@
-# lobby_server.py
 import socket
 from _thread import *
 import pickle
@@ -11,7 +10,8 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
     s.bind((server, port))
 except socket.error as e:
-    print(str(e))
+    print(f"Socket binding error: {str(e)}")
+    exit()
 
 s.listen(5)
 print("Lobby Server Started")
@@ -56,16 +56,18 @@ def handle_client(conn):
                 for lobby in lobbies:
                     if lobby["game"]["game_name"] == payload["game_name"]:
                         lobby["started"] = True
-                        for player in lobby["players"]:
-                            # Oyun başlangıcı mesajını her bir oyuncuya gönder
-                            conn.sendall(pickle.dumps(("START_GAME", None)))
             conn.sendall(pickle.dumps(lobbies))
-        except:
+        except Exception as e:
+            print(f"Error: {str(e)}")
             break
     print("Lost connection")
     conn.close()
 
 while True:
-    conn, addr = s.accept()
-    print("Connected to:", addr)
-    start_new_thread(handle_client, (conn,))
+    try:
+        conn, addr = s.accept()
+        print("Connected to:", addr)
+        start_new_thread(handle_client, (conn,))
+    except Exception as e:
+        print(f"Accept error: {str(e)}")
+        break

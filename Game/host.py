@@ -80,12 +80,10 @@ def host_game(win):
         username_rect = pygame.Rect(width // 2 - 100, height // 2 - 80, 200, 40)
         game_name_rect = pygame.Rect(width // 2 - 100, height // 2 + 20, 200, 40)
         enter_button = pygame.Rect(width // 2 - 50, height // 2 + 100, 100, 50)
-        back_button = pygame.Rect(width // 2 - 50, height // 2 + 160, 100, 50)
 
         pygame.draw.rect(win, grey, username_rect, border_radius=10)
         pygame.draw.rect(win, grey, game_name_rect, border_radius=10)
         draw_button('Enter', small_font, white, win, enter_button, grey)
-        draw_button('Back', small_font, white, win, back_button, red)
 
         draw_text(username, small_font, white, win, username_rect.centerx, username_rect.centery)
         draw_text(game_name, small_font, white, win, game_name_rect.centerx, game_name_rect.centery)
@@ -106,10 +104,8 @@ def host_game(win):
                         client = connect_to_lobby_server()
                         if client:
                             send_to_lobby_server(client, ("ADD", {"username": username, "game_name": game_name}))
-                            subprocess.Popen([sys.executable, "server.py"])  # Sunucuyu başlat
-                        return username, game_name
-                elif back_button.collidepoint(event.pos):
-                    return None  # Ana menüye geri dön
+                            server_process = subprocess.Popen([sys.executable, "server.py"])  # Sunucuyu başlat
+                            return username, game_name, server_process
             if event.type == pygame.KEYDOWN:
                 if input_active == "username":
                     if event.key == pygame.K_BACKSPACE:

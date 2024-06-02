@@ -80,7 +80,7 @@ def start_game(client, lobby):
     else:
         print("Not all players are ready.")
 
-def lobby_screen(username, lobby, is_host):
+def lobby_screen(username, lobby, is_host, server_process=None):
     chat_font = pygame.font.SysFont('Arial', 24)
     chat_input_box = pygame.Rect(420, 660, 360, 30)
     chat_box = pygame.Rect(420, 20, 360, 620)
@@ -92,7 +92,7 @@ def lobby_screen(username, lobby, is_host):
     client = connect_to_lobby_server()
     if client is None:
         print("Failed to connect to the lobby server.")
-        return
+        return "menu"
 
     run = True
     game_started = False
@@ -103,17 +103,17 @@ def lobby_screen(username, lobby, is_host):
         draw_text(f'Game Name: {lobby["game"]["game_name"]}', small_font, white, win, 150, 50)
 
         # Get updated lobby info from server
-        updated_lobby = send_to_lobby_server(client, ("GET", None))
-        if updated_lobby:
-            for updated in updated_lobby:
-                if updated["game"]["game_name"] == lobby["game"]["game_name"]:
-                    lobby = updated
+        updated_lobbies = send_to_lobby_server(client, ("GET", None))
+        if updated_lobbies:
+            for updated_lobby in updated_lobbies:
+                if isinstance(updated_lobby, dict) and updated_lobby["game"]["game_name"] == lobby["game"]["game_name"]:
+                    lobby = updated_lobby
                     break
 
         # Check if the game has started
         if lobby.get("started", False):
             run_client(win)  # Oyun başladığında run_client fonksiyonunu çağır
-            return
+            return "menu"
 
         # Debugging: Print the current state of players
         print(f"Players: {lobby['players']}")
@@ -174,6 +174,13 @@ def lobby_screen(username, lobby, is_host):
 
             if play_button.collidepoint(pygame.mouse.get_pos()):
                 if pygame.mouse.get_pressed()[0]:
+                    # Sunucudan güncellenmiş lobi durumunu al
+                    updated_lobbies = send_to_lobby_server(client, ("GET", None))
+                    if updated_lobbies:
+                        for updated_lobby in updated_lobbies:
+                            if isinstance(updated_lobby, dict) and updated_lobby["game"]["game_name"] == lobby["game"]["game_name"]:
+                                lobby = updated_lobby
+                                break
                     if all(player["ready"] for player in lobby["players"] if player["username"] != lobby["game"]["username"]):
                         start_game(client, lobby)
                     else:
@@ -186,7 +193,8 @@ def lobby_screen(username, lobby, is_host):
             if back_button.collidepoint(pygame.mouse.get_pos()):
                 if pygame.mouse.get_pressed()[0]:
                     send_to_lobby_server(client, ("REMOVE", {"game_name": lobby["game"]["game_name"]}))
-                    subprocess.Popen.kill()  # Serverı kapat
+                    if server_process:
+                        server_process.terminate()  # Server'ı kapat
                     return "menu"  # Ana menüye geri dön
 
         if error_message:
@@ -197,6 +205,28 @@ def lobby_screen(username, lobby, is_host):
     # Game started, clear screen and start client.py
     win.fill(black)
     pygame.display.update()
+
+def about_screen():
+    while True:
+        win.blit(bg, (0, 0))
+        draw_text('Hakkımızda', font, white, win, width // 2, height // 4)
+
+        names = ["Ömer Faruk", "Faruk", "Gümüş", "Anıl", "Burak"]
+        for i, name in enumerate(names):
+            draw_text(name, small_font, white, win, width // 2, height // 2 - 60 + i * 40)
+        
+        back_button = pygame.Rect(width // 2 - 50, height - 100, 100, 50)
+        draw_button('Back', small_font, white, win, back_button, red)
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if back_button.collidepoint(event.pos):
+                    return  # Ana menüye geri dön
 
 def main_menu():
     while True:
@@ -209,11 +239,13 @@ def main_menu():
         button_2 = pygame.Rect(width // 2 - 100, height // 2, 200, 50)
         button_3 = pygame.Rect(width // 2 - 100, height // 2 + 60, 200, 50)
         button_4 = pygame.Rect(width // 2 - 100, height // 2 + 120, 200, 50)
+        button_5 = pygame.Rect(width // 2 - 100, height // 2 + 180, 200, 50)
 
         draw_button('Play', font, white, win, button_1, grey)
         draw_button('Host', font, white, win, button_2, grey)
         draw_button('Join', font, white, win, button_3, grey)
-        draw_button('Exit', font, white, win, button_4, grey)
+        draw_button('About', font, white, win, button_4, grey)
+        draw_button('Exit', font, white, win, button_5, grey)
 
         if button_1.collidepoint((mx, my)):
             if pygame.mouse.get_pressed()[0]:
@@ -222,8 +254,8 @@ def main_menu():
             if pygame.mouse.get_pressed()[0]:
                 result = host_game(win)
                 if result:
-                    username, game_name = result
-                    next_screen = lobby_screen(username, {"game": {"game_name": game_name}, "players": [{"username": username, "ready": False}], "messages": []}, True)
+                    username, game_name, server_process = result
+                    next_screen = lobby_screen(username, {"game": {"game_name": game_name}, "players": [{"username": username, "ready": False}], "messages": []}, True, server_process)
                     if next_screen == "menu":
                         continue  # Ana menüye dön
         if button_3.collidepoint((mx, my)):
@@ -236,6 +268,9 @@ def main_menu():
                         continue  # Ana menüye dön
         if button_4.collidepoint((mx, my)):
             if pygame.mouse.get_pressed()[0]:
+                about_screen()
+        if button_5.collidepoint((mx, my)):
+            if pygame.mouse.get_pressed()[0]:
                 pygame.quit()
                 sys.exit()
 
@@ -247,4 +282,10 @@ def main_menu():
                 sys.exit()
 
 if __name__ == "__main__":
+    # Lobby server'ı başlat
+    lobby_server_process = subprocess.Popen([sys.executable, "lobby_server.py"])
+    
     main_menu()
+    
+    # Program kapatıldığında lobby server'ı durdur
+    lobby_server_process.terminate()

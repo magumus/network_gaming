@@ -52,7 +52,13 @@ def move_aliens():
 
 def threaded_client(conn, player):
     global last_alien_shot, game_over
-    conn.send(pickle.dumps((players[player], bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names)))
+    try:
+        conn.send(pickle.dumps((players[player], bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names)))
+    except IndexError:
+        print(f"Player index {player} out of range.")
+        conn.close()
+        return
+
     reply = ""
     while True:
         try:
@@ -61,7 +67,8 @@ def threaded_client(conn, player):
                 print("Disconnected")
                 break
             else:
-                players[player] = data[0]
+                if player < len(players):
+                    players[player] = data[0]
                 if data[1] is not None:
                     bullets.append((data[1], player))  # Store bullet with player index
                 if data[2] is not None:
