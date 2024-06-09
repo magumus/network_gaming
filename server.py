@@ -3,6 +3,7 @@ from _thread import *
 import pickle
 import pygame
 import random
+import pika
 
 server = "localhost"
 port = 5555
@@ -17,27 +18,34 @@ except socket.error as e:
 s.listen(2)
 print("Waiting for a connection, Server Started")
 
-# Define game variables
+# RabbitMQ bağlantısını oluştur
+try:
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue='game_queue')
+except pika.exceptions.AMQPConnectionError as e:
+    print(f"RabbitMQ Connection Error: {e}")
+    exit()
+
 rows = 4
 cols = 7
-alien_cooldown = 500  # bullet cooldown in milliseconds
+alien_cooldown = 500
 last_alien_shot = pygame.time.get_ticks()
-players = [pygame.Rect(200, 600, 50, 50), pygame.Rect(400, 600, 50, 50)]  # y koordinatlarını 500'den 600'e değiştirdik
-player_health = [3, 3]  # Each player has 3 health points
-bullets = []  # Changed to store (bullet, player_index) tuples
-alien_bullets = []  # Alien bullets list
+players = [pygame.Rect(200, 600, 50, 50), pygame.Rect(400, 600, 50, 50)]
+player_health = [3, 3]
+bullets = []
+alien_bullets = []
 aliens = []
-alien_direction = 1  # Alien movement direction
-scores = [0, 0]  # Skorları tutan liste
-game_over = False  # Oyunun bitip bitmediğini belirten değişken
-chat_messages = []  # Chat mesajlarını tutan liste
-player_names = ["", ""]  # Oyuncu isimlerini tutan liste
+alien_direction = 1
+scores = [0, 0]
+game_over = False
+chat_messages = []
+player_names = ["", ""]
 
-# Create aliens
 def create_aliens():
     for row in range(rows):
         for item in range(cols):
-            alien = pygame.Rect(100 + item * 80, 100 + row * 80, 40, 40)  # Aralarındaki boşluğu artırdık
+            alien = pygame.Rect(100 + item * 80, 100 + row * 80, 40, 40)
             aliens.append(alien)
 
 create_aliens()
@@ -62,21 +70,26 @@ def threaded_client(conn, player):
     reply = ""
     while True:
         try:
-            data = pickle.loads(conn.recv(2048))
+            data = conn.recv(2048)
             if not data:
                 print("Disconnected")
                 break
             else:
+                try:
+                    data = pickle.loads(data)
+                except (pickle.UnpicklingError, EOFError) as e:
+                    print(f"Data unpickling error: {e}")
+                    continue
+
                 if player < len(players):
                     players[player] = data[0]
                 if data[1] is not None:
-                    bullets.append((data[1], player))  # Store bullet with player index
+                    bullets.append((data[1], player))
                 if data[2] is not None:
-                    chat_messages.append(data[2])  # Store chat message
+                    chat_messages.append(data[2])
                 if data[3] is not None:
-                    player_names[player] = data[3]  # Store player name
+                    player_names[player] = data[3]
 
-                # Alien shooting logic
                 time_now = pygame.time.get_ticks()
                 if time_now - last_alien_shot > alien_cooldown and len(aliens) > 0:
                     attacking_alien = random.choice(aliens)
@@ -84,9 +97,8 @@ def threaded_client(conn, player):
                     alien_bullets.append(alien_bullet)
                     last_alien_shot = time_now
 
-                # Update bullets
                 for bullet, bullet_player in bullets[:]:
-                    bullet.y -= 3  # Bullet speed reduced from 5 to 3
+                    bullet.y -= 3
                     if bullet.y < 0:
                         bullets.remove((bullet, bullet_player))
                     else:
@@ -94,14 +106,13 @@ def threaded_client(conn, player):
                             if bullet.colliderect(alien):
                                 bullets.remove((bullet, bullet_player))
                                 aliens.remove(alien)
-                                scores[bullet_player] += 1  # Skoru ilgili oyuncuya artır
-                                if len(aliens) == 0:  # Tüm uzaylılar vuruldu
+                                scores[bullet_player] += 1
+                                if len(aliens) == 0:
                                     game_over = True
                                 break
 
-                # Update alien bullets
                 for alien_bullet in alien_bullets[:]:
-                    alien_bullet.y += 5  # Alien bullet speed increased
+                    alien_bullet.y += 5
                     if alien_bullet.y > 800:
                         alien_bullets.remove(alien_bullet)
                     else:
@@ -110,14 +121,13 @@ def threaded_client(conn, player):
                                 alien_bullets.remove(alien_bullet)
                                 player_health[i] -= 1
                                 if player_health[i] <= 0:
-                                    players[i] = pygame.Rect(-100, -100, 0, 0)  # Remove player from screen
+                                    players[i] = pygame.Rect(-100, -100, 0, 0)
                                     print(f"Player {i+1} has been destroyed!")
 
-                # Update aliens
                 move_aliens()
 
-                # Send updated game state to client
                 reply = (players, bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names)
+                channel.basic_publish(exchange='', routing_key='game_queue', body=pickle.dumps(reply))
                 print("Received: ", data)
                 print("Sending : ", reply)
 

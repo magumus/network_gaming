@@ -40,7 +40,7 @@ def handle_client(conn):
                 for lobby in lobbies:
                     if lobby["game"]["game_name"] == payload["game_name"]:
                         lobby["players"] = [player for player in lobby["players"] if player["username"] != payload["username"]]
-                        if not lobby["players"]:  # Remove lobby if empty
+                        if not lobby["players"]:
                             lobbies.remove(lobby)
             elif action == "MESSAGE":
                 for lobby in lobbies:

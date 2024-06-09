@@ -1,5 +1,7 @@
 import pygame
 from network import Network
+import pika
+import pickle
 
 pygame.init()
 
@@ -11,13 +13,12 @@ pygame.display.set_caption("Space Invaders Multiplayer")
 bg = pygame.image.load("img/bg.png")
 spaceship_img = pygame.image.load("img/spaceship.png")
 bullet_img = pygame.image.load("img/bullet.png")
-alien_img = pygame.image.load("img/alien1.png")  # Tüm uzaylılar için aynı resim kullanılıyor
+alien_img = pygame.image.load("img/alien1.png")
 
 clock = pygame.time.Clock()
 spaceship_width = 50
 spaceship_height = 50
 
-# Fire cooldown
 bullet_cooldown = 500  # milliseconds
 last_bullet_shot = pygame.time.get_ticks()
 
@@ -83,31 +84,46 @@ def redrawWindow(win, players, bullets, aliens, player_health, alien_bullets, sc
     pygame.display.update()
     return None
 
+def rabbitmq_callback(ch, method, properties, body):
+    global players, bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names
+    data = pickle.loads(body)
+    players, bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names = data
+
 def run_client(win):
-    run = True
+    global last_bullet_shot
+    
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue='game_queue')
+    channel.basic_consume(queue='game_queue', on_message_callback=rabbitmq_callback, auto_ack=True)
+
     n = Network()
     initial_data = n.getP()
 
     if initial_data is None:
         print("Failed to connect to the server.")
-        return  # Bağlantı başarısız olursa ana menüye dön
+        return
 
     p, bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names = initial_data
     player = pygame.Rect(p[0], p[1], spaceship_width, spaceship_height)
-    global last_bullet_shot
 
     chat_input_box = pygame.Rect(10, 650, 780, 40)
     chat_text = ''
 
-    while run:
+    while True:
         clock.tick(60)
+        channel.connection.process_data_events()  # Process RabbitMQ messages
+
         data = n.send((player, None, None, None))
+        if data is None:
+            continue
         players, bullets, aliens, player_health, alien_bullets, scores, game_over, chat_messages, player_names = data
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                run = False
-                break
+                connection.close()
+                pygame.quit()
+                return
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     if chat_text != '':
@@ -120,14 +136,15 @@ def run_client(win):
             if event.type == pygame.MOUSEBUTTONDOWN and game_over:
                 back_button = draw_game_over(win, scores)
                 if back_button.collidepoint(event.pos):
-                    return  # Ana menüye geri dön
+                    connection.close()
+                    return
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and player.x > 0:
             player.x -= 5
         if keys[pygame.K_RIGHT] and player.x < width - player.width:
             player.x += 5
-        if keys[pygame.K_SPACE] and not game_over:  # Only allow shooting if the game is not over
+        if keys[pygame.K_SPACE] and not game_over:
             time_now = pygame.time.get_ticks()
             if time_now - last_bullet_shot > bullet_cooldown:
                 bullet = pygame.Rect(player.x + player.width // 2, player.y, 5, 10)
@@ -138,11 +155,10 @@ def run_client(win):
         if game_over and back_button:
             if back_button.collidepoint(pygame.mouse.get_pos()):
                 if pygame.mouse.get_pressed()[0]:
-                    return  # Ana menüye geri dön
+                    connection.close()
+                    return
     
         pygame.display.update()
-
-    pygame.quit()
 
 if __name__ == "__main__":
     run_client(win)
